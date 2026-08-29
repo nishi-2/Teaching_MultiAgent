@@ -165,3 +165,221 @@ The restricted `CoordinatorGateway` and mediated context exchange are intentiona
 **Status:** Complete.
 
 **Next phase:** Implement the formal Coordinator task flow, mediated context exchange, and stronger subagent communication contracts.
+
+
+
+# AI Teaching Tutor — Phase 2 Process Followed
+
+## Phase 2 objective
+
+The objective of Phase 2 was to formalize the Coordinator-mediated multiagent architecture. The Phase 1 application already had a basic Streamlit interface, Coordinator, and deterministic Teaching Agent. Phase 2 expanded that foundation with typed task communication, a central context store, controlled subagent interaction, routing, multiagent dispatch, failure handling, isolation tests, and Streamlit verification.
+
+The completed Phase 2 workflow is:
+
+```
+User → Streamlit → Coordinator → Selected Subagents → Coordinator → Streamlit response
+```
+
+The Coordinator remains the central control point. Subagents communicate with the Coordinator but do not communicate directly with one another.
+
+## Step 1: Upgrade the communication models
+
+The shared communication models were expanded to support the growing multiagent workflow.
+
+The models now represent agent names, task statuses, tutor requests, tutor responses, Coordinator tasks, approved context, subagent findings, requested context, follow-up objectives, and metadata.
+
+Coordinator tasks now contain a task ID, parent request ID, assigned agent, objective, user question, approved context, maximum step limit, and timeout value.
+
+## Step 2: Create the Coordinator Gateway
+
+A restricted Coordinator Gateway was introduced as the communication interface available to subagents.
+
+The Gateway defines operations for submitting a finding, requesting approved context, and requesting follow-up work. It does not expose the full Coordinator internals or direct access to the agent registry.
+
+This establishes the intended communication boundary between the Coordinator and its subagents.
+
+## Step 3: Create the Coordinator context store
+
+A central context store was created to keep subagent findings associated with their parent request.
+
+The store supports adding findings, retrieving findings, searching findings by topic, and clearing all findings for a request.
+
+The context store ensures that findings from one user request do not leak into another user request.
+
+## Step 4: Connect the context store to the Coordinator
+
+The Coordinator was updated to own the context store and maintain the relationship between individual task IDs and parent request IDs.
+
+When a subagent submits a finding, the Coordinator identifies the related parent request and stores the finding centrally.
+
+When a subagent requests context, the Coordinator returns approved findings from the relevant parent request.
+
+## Step 5: Update the subagent interface
+
+The base subagent interface was updated so every subagent receives a restricted Coordinator Gateway when it runs.
+
+This allows a subagent to interact with the Coordinator without receiving unrestricted access to other agents or the complete workflow state.
+
+## Step 6: Update the Teaching Agent
+
+The deterministic Teaching Agent was updated to receive the Coordinator Gateway.
+
+Instead of returning its finding directly as the final response, the Teaching Agent submits its finding through the Coordinator Gateway and returns a structured task result.
+
+This demonstrates that subagents can communicate with the Coordinator through the approved interface.
+
+## Step 7: Pass the Coordinator Gateway during dispatch
+
+The Coordinator was updated to pass itself through the Gateway interface when invoking the Teaching Agent.
+
+The Teaching Agent can now submit findings to the Coordinator while remaining unable to communicate directly with other agents.
+
+## Step 8: Test mediated context exchange
+
+A context-aware test agent was created for testing purposes.
+
+The test agent submits a finding through the Coordinator, requests context through the Coordinator, and returns the approved context it received.
+
+The test confirmed that a subagent can submit and request information through the Coordinator-mediated channel.
+
+## Step 9: Create the Coordinator router
+
+A deterministic Coordinator router was added.
+
+The router examines the user question and selects relevant agent names. Teaching requests are routed to the Teaching Agent. Questions involving PDFs or uploaded documents are routed to the PDF RAG Agent. Current or documentation-related questions are routed to the Web Research Agent. Repository or code-example questions are routed to the GitHub Agent.
+
+The router only makes a routing decision. It does not invoke agents itself.
+
+## Step 10: Test the Coordinator router
+
+Tests were added to confirm that the router always selects the Teaching Agent and selects the appropriate PDF, Web Research, and GitHub agents when relevant keywords appear in the question.
+
+A test-discovery issue was corrected during this step to ensure that the new test file used the correct filename pattern and was collected by pytest.
+
+## Step 11: Connect routing to the Coordinator
+
+The Coordinator was updated to use the router before dispatching work.
+
+The Coordinator now selects relevant registered agents, creates a separate task for each selected agent, tracks the tasks under the parent request, dispatches them, collects their results, and aggregates their findings.
+
+Unregistered agents are skipped until their real implementations are added in later phases.
+
+## Step 12: Create temporary research-agent stubs
+
+Temporary stub versions of the PDF RAG Agent, Web Research Agent, and GitHub Agent were created.
+
+The stubs do not yet search documents, access the web, or inspect GitHub repositories. They only submit confirmation findings to the Coordinator so the routing and dispatch architecture can be tested independently from retrieval implementation.
+
+## Step 13: Register the temporary research agents
+
+The temporary PDF, Web Research, and GitHub agents were registered in the Coordinator’s agent registry.
+
+The Coordinator can now dispatch to all four current agent types: Teaching, PDF RAG, Web Research, and GitHub.
+
+## Step 14: Test multiagent dispatch
+
+A multiagent dispatch test was added.
+
+The test submits a question involving the latest GitHub repository code example. The Coordinator routes the request to the Teaching Agent, Web Research Agent, and GitHub Agent, then combines their findings centrally.
+
+The test confirmed that multiple agents can work on one request without communicating directly with one another.
+
+## Step 15: Test PDF-agent dispatch
+
+A PDF dispatch test was added.
+
+The test submits a question involving an uploaded PDF document. The Coordinator routes the request to the Teaching Agent and PDF RAG Agent and combines both findings.
+
+The PDF agent used at this stage is still a temporary stub. Real document ingestion and retrieval will be implemented in a later phase.
+
+## Step 16: Test Coordinator failure handling
+
+A failing mock Teaching Agent was created for testing purposes.
+
+The test confirmed that when an assigned subagent returns a failed status, the Coordinator returns a controlled failed response rather than crashing or producing an invalid answer.
+
+## Step 17: Test request-context isolation
+
+A context isolation test was added.
+
+The test confirmed that findings associated with one parent request are not returned for another parent request and that unknown requests return no findings.
+
+This protects against cross-request context leakage.
+
+## Step 18: Test context search and cleanup
+
+A context search and cleanup test was added.
+
+The test confirmed that the context store can find relevant findings by topic and remove all findings associated with a completed request.
+
+A missing cleanup method was identified during testing and added to the context store implementation.
+
+## Step 19: Run the complete Phase 2 test suite
+
+The full automated test suite was executed after routing, dispatch, context, failure, and isolation behavior were implemented.
+
+The final Phase 2 suite completed successfully with ten passing tests.
+
+## Step 20: Verify the Streamlit application
+
+The Streamlit application was started and tested with representative questions.
+
+A basic conceptual question routed to the Teaching Agent. A PDF-related question routed to the Teaching Agent and PDF RAG stub. A GitHub and current-information question routed to the Teaching Agent, Web Research stub, and GitHub stub.
+
+The application successfully displayed the aggregated Coordinator response.
+
+## Phase 2 architecture result
+
+Phase 2 established the following communication pattern:
+
+```
+Subagent → Coordinator Gateway → Coordinator Context Store
+
+Coordinator → approved context → Subagent
+```
+
+The following direct communication pattern is not allowed:
+
+```
+Subagent A → Subagent B
+```
+
+The Coordinator now controls routing, task creation, dispatch, finding storage, context sharing, aggregation, failure handling, and final response delivery.
+
+## Files created or updated during Phase 2
+
+| File or directory | Purpose |
+| --- | --- |
+| `app/domain/messages.py` | Expanded typed communication models |
+| `app/agents/base.py` | Gateway-aware subagent interface |
+| `app/agents/teaching_agent.py` | Gateway-aware deterministic Teaching Agent |
+| `app/agents/stub_agents.py` | Temporary PDF, Web, and GitHub agents |
+| `app/coordinator/gateway.py` | Restricted Coordinator communication interface |
+| `app/coordinator/context_store.py` | Central mediated finding store |
+| `app/coordinator/router.py` | Question-based agent selection |
+| `app/coordinator/coordinator.py` | Routing, dispatch, aggregation, and context control |
+| `tests/test_coordinator_context.py` | Mediated context exchange test |
+| `tests/test_router.py` | Router behavior tests |
+| `tests/test_multiagent_dispatch.py` | Multiagent dispatch tests |
+| `tests/test_pdf_dispatch.py` | PDF-agent routing test |
+| `tests/test_failure_handling.py` | Failed-agent behavior test |
+| `tests/test_context_isolation.py` | Request isolation test |
+| `tests/test_context_search.py` | Context search and cleanup test |
+
+## Temporary implementation limitations
+
+The PDF, Web Research, and GitHub agents are currently stubs. They do not yet retrieve real evidence.
+
+The Teaching Agent remains deterministic and does not yet call OpenAI GPT.
+
+The Coordinator currently dispatches registered agents sequentially. More advanced parallel execution, retries, timeout enforcement, source normalization, and evidence verification will be added later.
+
+Citation verification, real PDF ingestion, embeddings, Qdrant retrieval, web fetching, GitHub search, and OpenAI GPT integration are not part of the completed Phase 2 implementation.
+
+## Phase 2 completion status
+
+**Status:** Complete.
+
+**Validated behavior:** Typed task communication, Coordinator-mediated findings, routing, multiagent dispatch, failure handling, request isolation, context search, context cleanup, and Streamlit integration.
+
+**Next phase:** Integrate the OpenAI GPT adapter and replace the deterministic Teaching Agent with a real GPT-backed implementation.
