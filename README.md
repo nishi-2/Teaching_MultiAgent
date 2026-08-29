@@ -12,3 +12,9 @@ QDRANT_URL=http://localhost:6333
 QDRANT_COLLECTION=ai_tutor_documents
 DOCUMENTS_DIR=data/documents
 LOG_LEVEL=INFO
+
+- Lay the skeleton structure as planned before starting with development - We may have to increase or decrease number of files as we proceed. However I have found it easy to track progress with a workflow decision and a skeleton structure plan
+
+- Initialize __init__.py files, which tells python that the particular folders are application packages.
+
+- Setting up pyproject.toml file
