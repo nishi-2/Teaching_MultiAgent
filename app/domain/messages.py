@@ -1,5 +1,12 @@
-from typing import Literal
+from typing import Literal, Any, Optional
 from pydantic import BaseModel, Field
+
+AgentName = Literal[
+    "teaching_agent", "pdf_rag_agent", "web_research_agent",
+    "github_agent", "citation_agent", "composer_agent"
+]
+
+TaskStatus = Literal["success", "partial", "failed", "abstain"]
 
 class TutorRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
@@ -13,12 +20,21 @@ class TutorResponse(BaseModel):
 
 class CoordinatorTask(BaseModel):
     task_id: str
+    parent_request_id: str
+    assigned_agent: AgentName
     objective: str
     user_question: str
+    approved_context: dict[str, Any] = Field(default_factory=dict)
+    max_steps: int = 5
+    timeout_seconds: int = 30
 
 
 class SubagentResult(BaseModel):
     task_id: str
     agent_name: str
-    status: Literal["success", "failed"]
+    status: TaskStatus
     findings: list[str] = Field(default_factory=list)
+    requested_context: list[str] = Field(default_factory=list)
+    follow_up_objective: Optional[str] = None
+    metadata: dict[str, Any] = Field(default_factory=list)
+    

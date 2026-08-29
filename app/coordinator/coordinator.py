@@ -7,8 +7,12 @@ class Coordinator:
         self.teaching_agent = teaching_agent
 
     def handle_request(self, request: TutorRequest) -> TutorResponse:
+        parent_request_id = str(uuid4)
+
         task = CoordinatorTask(
             task_id= str(uuid4()),
+            parent_request_id= parent_request_id,
+            assigned_agent="teaching_agent",
             objective="Create a teaching plan",
             user_question=request.question
         )
