@@ -1,0 +1,9 @@
+streamlit
+pydantic-settings
+openai
+qdrant-client
+pypdf
+httpx
+pytest
+ruff
+mypy
