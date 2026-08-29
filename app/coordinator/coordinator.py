@@ -8,11 +8,16 @@ from app.coordinator.context_store import CoordinatorContextStore
 from app.coordinator.gateway import CoordinatorGateway
 from app.coordinator.router import CoordinatorRouter
 
+from app.agents.stub_agents import GithubAgent, PdfRagAgent, WebResearchAgent
+
 
 class Coordinator(CoordinatorGateway):
     def __init__(self, teaching_agent: BaseSubagent) -> None:
         self.agents: Dict[str, BaseSubagent] = {
             "teaching_agent": teaching_agent,
+            "pdf_rag_agent": PdfRagAgent(),
+            "web_research_agent": WebResearchAgent(),
+            "github_agent": GithubAgent(),
         }
         self.router = CoordinatorRouter()
         self.context_store = CoordinatorContextStore()

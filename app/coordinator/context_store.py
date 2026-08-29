@@ -26,3 +26,7 @@ class CoordinatorContextStore:
         return [
             finding for finding in self.get_findings(request_id) if normalized_topic in finding.lower()
         ]
+
+    def clear_request(self, request_id: str) -> None:
+        """Remove all findings associated with a request."""
+        self._findings.pop(request_id, None)
