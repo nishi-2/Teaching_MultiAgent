@@ -1,16 +1,20 @@
 from uuid import uuid4
-from typing import Dict
+from typing import Dict, List
 
 from app.agents.base import BaseSubagent
 from app.domain.messages import CoordinatorTask, SubagentResult, TutorRequest, TutorResponse
 
 from app.coordinator.context_store import CoordinatorContextStore
 from app.coordinator.gateway import CoordinatorGateway
+from app.coordinator.router import CoordinatorRouter
 
 
 class Coordinator(CoordinatorGateway):
     def __init__(self, teaching_agent: BaseSubagent) -> None:
-        self.teaching_agent = teaching_agent
+        self.agents: Dict[str, BaseSubagent] = {
+            "teaching_agent": teaching_agent,
+        }
+        self.router = CoordinatorRouter()
         self.context_store = CoordinatorContextStore()
         self._task_to_request: Dict[str, str] = {}
 
@@ -43,24 +47,47 @@ class Coordinator(CoordinatorGateway):
             metadata={"message": "Follow-up routing will be implemented next."},
         )
 
+    def dispatch(self, task: CoordinatorTask) -> SubagentResult:
+        """Dispatch one task to one registered subagent."""
+        agent = self.agents.get(task.assigned_agent)
+
+        if agent is None:
+            return SubagentResult(
+                task_id=task.task_id,
+                agent_name=task.assigned_agent,
+                status="failed",
+                findings=[],
+                metadata={"error": "Agent is not registered."},
+            )
+
+        return agent.run(task, coordinator=self)
+
 
     def handle_request(self, request: TutorRequest) -> TutorResponse:
-        parent_request_id = str(uuid4)
+        parent_request_id = str(uuid4())
+        selected_agents = self.router.select_agents(request.question)
+        results: List[SubagentResult] = []
 
-        task = CoordinatorTask(
-            task_id= str(uuid4()),
-            parent_request_id= parent_request_id,
-            assigned_agent="teaching_agent",
-            objective="Create a teaching plan",
-            user_question=request.question
-        )
-        self._task_to_request[task.task_id] = parent_request_id
-        result: SubagentResult = self.teaching_agent.run(task, coordinator=self)
+        for agent_name in selected_agents:
+            if agent_name not in self.agents:
+                continue
 
-        for finding in result.findings:
-            self.submit_finding(task.task_id, finding)
+            task = CoordinatorTask(
+                task_id=str(uuid4()),
+                parent_request_id=parent_request_id,
+                assigned_agent=agent_name,
+                objective="Process the user question",
+                user_question=request.question,
+            )
 
-        if result.status == "failed":
+            self._task_to_request[task.task_id] = parent_request_id
+            result = self.dispatch(task)
+            results.append(result)
+
+            for finding in result.findings:
+                self.submit_finding(task.task_id, finding)
+
+        if not results or all(result.status == "failed" for result in results):
             return TutorResponse(
                 answer="The Coordinator could not complete the request.",
                 status="failed",
@@ -68,3 +95,4 @@ class Coordinator(CoordinatorGateway):
 
         answer = "\n".join(self.context_store.get_findings(parent_request_id))
         return TutorResponse(answer=answer, status="success")
+
