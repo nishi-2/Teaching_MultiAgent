@@ -1,9 +1,10 @@
 from typing import List
 
-class CoordinatorRouter:
-    """ Select subagent based on user questions """
 
-    def select_subagents(self, question: str) -> List[str]:
+class CoordinatorRouter:
+    """Selects subagents based on the user question."""
+
+    def select_agents(self, question: str) -> List[str]:
         normalized_question = question.lower()
         selected_agents = ["teaching_agent"]
 
