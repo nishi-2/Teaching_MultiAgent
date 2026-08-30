@@ -633,3 +633,212 @@ The temporary connectivity script should not be included in the normal automated
 **Validated behavior:** OpenAI GPT configuration, centralized API access, usage tracking, structured output, test doubles, GPT Teaching Agent integration, empty-response handling, learner-level prompting, Streamlit integration, and fifteen passing automated tests.
 
 **Next phase:** Implement local PDF ingestion, page-aware chunking, embeddings, and Qdrant-backed retrieval.
+
+
+# Phase 4 Process Followed: PDF Ingestion, Qdrant RAG, and Active-Document Isolation
+
+## Phase 4 objective
+
+Phase 4 added local PDF ingestion, OpenAI embeddings, Qdrant vector retrieval, PDF-grounded teaching, Streamlit document upload, and active-document isolation.
+
+### Step 1: Define document metadata
+
+A document metadata model was created to track each PDF’s identifier, filename, path, SHA-256 hash, processing status, page count, chunk count, errors, and timestamps.
+
+### Step 2: Extract PDF pages
+
+A PDF extraction component was created using page-aware extraction. Each extracted page retains its one-based page number so future answers can cite the originating page.
+
+### Step 3: Split pages into chunks
+
+A page-aware chunking component was added. It splits page text into overlapping word-based chunks while preserving the original page number and chunk index.
+
+### Step 4: Test PDF chunking
+
+Automated tests were added to verify that chunks preserve page numbers, overlap correctly, and reject invalid chunking parameters.
+
+### Step 5: Add a sample PDF
+
+A sample PDF was placed in the local document directory for extraction, indexing, retrieval, and end-to-end testing.
+
+### Step 6: Test PDF extraction
+
+The extraction component was tested against the sample PDF to confirm that pages are returned with page numbers and text fields.
+
+### Step 7: Create document hashing
+
+A SHA-256 file-hashing utility was added. The hash provides a stable document identity and allows the system to detect changed files.
+
+### Step 8: Test document hashing
+
+Automated tests verified that hashing is stable for the same file and produces a valid SHA-256-length value.
+
+### Step 9: Create the ingestion manifest
+
+A JSON-based ingestion manifest was created to persist document records and indexing status between application runs.
+
+### Step 10: Test manifest persistence
+
+Automated tests verified that document records can be saved and loaded with their metadata preserved.
+
+### Step 11: Create the PDF ingestion pipeline
+
+The ingestion pipeline connected file hashing, PDF extraction, page-aware chunking, document metadata, and manifest persistence.
+
+### Step 12: Test the ingestion pipeline
+
+The pipeline was tested against the sample PDF to confirm successful extraction and persistent document recording.
+
+### Step 13: Create the embedding interface
+
+An interchangeable embedding-provider interface was created so the system can use OpenAI embeddings initially and support local embedding models later without changing the rest of the RAG architecture.
+
+### Step 14: Test the embedding interface
+
+A fake embedding provider was used to verify that one vector is produced for each input text without making external API calls.
+
+### Step 15: Configure the embedding model
+
+A separate configurable embedding-model setting was added. This keeps the teaching GPT model and document-embedding model independent.
+
+### Step 16: Implement the OpenAI embedding provider
+
+An OpenAI embedding provider was added. It sends document or query text to the configured embedding model and returns vectors.
+
+### Step 17: Test the OpenAI embedding provider
+
+Automated tests used a fake OpenAI client to verify model selection, input handling, and vector extraction without calling the external API.
+
+### Step 18: Verify real OpenAI embeddings
+
+A manual connectivity check successfully generated two embeddings with 1,536 dimensions each.
+
+### Step 19: Create the local Qdrant service
+
+Qdrant was added through Docker Compose with persistent local storage mounted under the project data directory.
+
+### Step 20: Create the Qdrant store
+
+A Qdrant store abstraction was implemented to create the document collection with cosine similarity and the configured vector size.
+
+### Step 21: Test Qdrant collection creation
+
+Automated tests verified that the collection is created when absent and is not recreated when it already exists.
+
+### Step 22: Verify the real Qdrant connection
+
+A manual connectivity check created or loaded the configured collection and confirmed that the local Qdrant service was reachable.
+
+### Step 23: Add vector upsert support
+
+The Qdrant store was extended to persist vectors together with document, file, page, chunk, and text metadata.
+
+### Step 24: Test vector upsert
+
+Automated tests verified vector and payload length validation and confirmed that metadata is stored with vectors.
+
+### Step 25: Add vector search
+
+Vector search was added to retrieve the most similar payloads from Qdrant for a query embedding.
+
+### Step 26: Test vector search
+
+Automated tests verified query handling, result conversion, similarity scores, and payload extraction.
+
+### Step 27: Create the document indexer
+
+A document indexer was created to connect PDF extraction, chunking, OpenAI embeddings, Qdrant upsert, and manifest updates.
+
+### Step 28: Test document indexing
+
+The indexer was tested using fake embeddings and a fake vector store to confirm that each chunk produces a vector and page-aware metadata payload.
+
+### Step 29: Index the sample PDF for real
+
+The sample PDF was embedded and indexed into the local Qdrant collection using the real OpenAI embedding provider.
+
+### Step 30: Create the real PDF RAG Agent
+
+A PDF RAG Agent was added. It embeds the user query, searches Qdrant, formats retrieved PDF evidence, and communicates findings only through the Coordinator.
+
+### Step 31: Allow PDF-agent injection
+
+The Coordinator was updated so the real PDF RAG Agent can be injected while retaining a temporary stub for tests and compatibility.
+
+### Step 32: Connect PDF RAG to Streamlit
+
+The Streamlit application was updated to use the real PDF RAG Agent together with the GPT Teaching Agent.
+
+### Step 33: Create the PDF evidence model
+
+A typed PDF evidence model was introduced for document identifiers, filenames, page numbers, excerpts, similarity scores, and citation labels.
+
+### Step 34: Use typed evidence in the PDF RAG Agent
+
+The PDF RAG Agent was updated to validate retrieved results through the PDF evidence model before submitting findings to the Coordinator.
+
+### Step 35: Test PDF evidence validation
+
+Automated tests verified citation labels and rejected invalid page numbers and similarity scores.
+
+### Step 36: Add a retrieval threshold
+
+A configurable minimum similarity threshold was added so weak matches can be rejected instead of being passed to GPT.
+
+### Step 37: Apply the threshold
+
+The PDF RAG Agent was updated to filter Qdrant results using the configured threshold and report when no sufficiently relevant evidence exists.
+
+### Step 38: Test weak-match rejection
+
+Automated tests verified that matches below the threshold are rejected and reported as partial retrieval results.
+
+### Step 39: Create the document upload helper
+
+A safe upload helper was created to accept PDF files, normalize their filenames, and save them inside the configured document directory.
+
+### Step 40: Test safe PDF upload
+
+Automated tests verified PDF-only validation and safe filename handling.
+
+### Step 41: Add PDF upload and indexing to Streamlit
+
+Streamlit was updated with a PDF uploader, save-and-index action, indexing status, and integration with the document indexer.
+
+### Step 42: Add the active-document test
+
+An end-to-end test was added to verify that the selected document identifier reaches the PDF agent and that its evidence reaches the GPT prompt.
+
+### Step 43: Run full PDF workflow validation
+
+The complete test suite and Streamlit workflow were run to verify upload, indexing, retrieval, Coordinator mediation, and GPT response generation.
+
+### Step 44: Add a document-status helper
+
+The ingestion manifest was extended with a document-listing operation for displaying tracked documents.
+
+### Step 45: Display indexed-document status
+
+Streamlit was updated to display indexed document names, statuses, page counts, and chunk counts.
+
+### Step 46: Test document listing
+
+Automated tests verified that manifest records can be listed with their metadata.
+
+### Step 47: Validate the complete Phase 4 workflow
+
+The final validation confirmed that uploaded PDFs can be indexed, the active document is tracked, retrieval is restricted to the active document, GPT receives approved evidence, and unrelated older content is not returned in the final answer.
+
+## Phase 4 result
+
+Phase 4 completed the local PDF RAG foundation. The application can now upload and index PDFs, create OpenAI embeddings, store vectors in Qdrant, retrieve page-aware evidence, pass approved evidence through the Coordinator, and generate a GPT teaching response based on the selected document.
+
+## Remaining limitations
+
+Web research, GitHub research, formal citation verification, advanced evidence normalization, production authentication, retry policies, parallel execution, backups, and deployment hardening remain future work.
+
+## Next phase
+
+The next phase will implement web research and source retrieval. Web findings will return to the Coordinator, which will decide what evidence can be passed to the Teaching Agent and Citation Agent.
+
+**Phase 4 status:** Complete.

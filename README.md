@@ -11,9 +11,9 @@ The project is being developed as an end-to-end AI teaching service with OpenAI 
 | Phase 1: Project skeleton and deterministic Streamlit vertical slice | Complete |
 | Phase 2: Coordinator-mediated orchestration | Complete |
 | Phase 3: OpenAI GPT adapter and real model integration | Complete |
-| Phase 4: PDF ingestion and Qdrant-backed RAG | Next |
-| Phase 5: Evidence-grounded citations and verification | Planned |
-| Phase 6: Web research and source retrieval | Planned |
+| Phase 4: PDF ingestion and Qdrant-backed RAG | Complete |
+| Phase 5: Web research and source retrieval | Next |
+| Phase 6: Evidence-grounded citations and verification | Planned |
 | Phase 7: GitHub research | Planned |
 | Phase 8: Evaluation and production hardening | Planned |
 | Phase 9: Deployment | Planned |
@@ -60,9 +60,7 @@ Subagent A → Subagent B
 
 ## Phase 1 implementation
 
-Phase 1 created the initial Python and Streamlit project skeleton.
-
-The project folder, Python virtual environment, dependency file, Git ignore rules, environment template, package directories, project configuration, settings module, domain models, base subagent interface, deterministic Teaching Agent, Coordinator, Streamlit entrypoint, smoke test, logging configuration, and README were created.
+Phase 1 created the initial Python and Streamlit project skeleton. The project folder, Python virtual environment, dependency file, Git ignore rules, environment template, package directories, project configuration, settings module, domain models, base subagent interface, deterministic Teaching Agent, Coordinator, Streamlit entrypoint, smoke test, logging configuration, and README were created.
 
 The initial application flow was:
 
@@ -74,19 +72,15 @@ Phase 1 was validated by compiling the application and running the automated smo
 
 ## Phase 2 implementation
 
-Phase 2 formalized the multiagent architecture.
-
-Typed communication models were added for tutor requests, tutor responses, Coordinator tasks, subagent results, agent names, task status, approved context, follow-up objectives, and metadata.
+Phase 2 formalized the multiagent architecture. Typed communication models were added for tutor requests, tutor responses, Coordinator tasks, subagent results, agent names, task status, approved context, follow-up objectives, and metadata.
 
 A restricted Coordinator Gateway was created. It defines controlled operations for submitting findings, requesting approved context, and requesting follow-up work.
 
-A central Coordinator context store was implemented. It groups findings by parent request and supports adding findings, retrieving findings, searching findings by topic, and clearing completed request context.
+A central Coordinator context store was implemented. It groups findings by parent request and supports adding, retrieving, searching, and clearing findings.
 
 The Coordinator was updated to maintain task-to-request relationships, accept findings from subagents, return approved context, use a router, dispatch registered agents, aggregate findings, and handle failed agents.
 
-A deterministic router was added for selecting the Teaching, PDF RAG, Web Research, and GitHub agents based on the user question.
-
-Temporary PDF, Web Research, and GitHub stubs were added so routing and multiagent dispatch could be tested before implementing real retrieval logic.
+A deterministic router was added for selecting the Teaching, PDF RAG, Web Research, and GitHub agents based on the user question. Temporary PDF, Web Research, and GitHub stubs were added so routing and multiagent dispatch could be tested before implementing real retrieval logic.
 
 Phase 2 was validated with tests covering communication models, mediated context exchange, routing, multiagent dispatch, PDF-agent dispatch, failure handling, request isolation, context search, context cleanup, and the Streamlit workflow.
 
@@ -94,9 +88,9 @@ Phase 2 was validated with tests covering communication models, mediated context
 
 Phase 3 integrated OpenAI GPT while preserving the Coordinator architecture and keeping automated tests independent of external API calls.
 
-The initial default model is `gpt-5-mini`. The model name is configured through environment variables rather than being hardcoded throughout the application.
+The default teaching model is configurable and currently set to `gpt-5-mini`. The model name is read from environment variables rather than being hardcoded throughout the application.
 
-A centralized OpenAI client adapter was created. It handles model configuration, Chat Completions requests, completion limits, visible response validation, and token usage extraction.
+A centralized OpenAI client adapter was created. It handles model configuration, Chat Completions requests, completion limits, visible-response validation, and token usage extraction.
 
 A typed usage record was added for prompt tokens, completion tokens, and total tokens. Structured JSON Schema output support was also added for future Coordinator plans, evidence records, citation reports, and answer models.
 
@@ -104,44 +98,90 @@ A GPT-backed Teaching Agent was created. It builds the teaching prompt, includes
 
 The GPT Teaching Agent is testable through dependency injection. Automated tests use fake LLM adapters and do not call OpenAI.
 
-The Streamlit application now uses the GPT Teaching Agent for real questions. It displays a controlled error when the model returns an empty response or when a runtime failure occurs.
-
-The learner-level setting is passed from Streamlit to the Tutor Request, from the Tutor Request to the Coordinator Task, and from the Coordinator Task into the GPT teaching prompt.
+The Streamlit application now uses the GPT Teaching Agent for real questions and displays controlled errors when the model returns an empty response or when a runtime failure occurs.
 
 Phase 3 was validated through real Streamlit requests and automated tests covering the model adapter, usage tracking, structured output, GPT Teaching Agent, empty responses, learner-level prompting, and the existing Coordinator workflow.
 
+## Phase 4 implementation
+
+Phase 4 added local PDF ingestion, OpenAI embeddings, Qdrant vector storage, active-document isolation, Streamlit document upload, and PDF-grounded GPT teaching.
+
+A document metadata model was created to track filenames, paths, hashes, statuses, page counts, chunk counts, errors, and timestamps. PDF page extraction and page-aware chunking preserve the source page for future citations.
+
+SHA-256 document hashing and a JSON ingestion manifest were added to detect document identity and persist indexing status. The document indexer connects extraction, chunking, embeddings, Qdrant upsert, and manifest persistence.
+
+An interchangeable embedding interface and an OpenAI embedding provider were implemented. Real embedding generation was verified successfully, producing 1,536-dimensional vectors for the configured embedding model.
+
+Qdrant was added through Docker Compose with persistent local storage. The Qdrant store supports collection creation, vector upsert, payload metadata, similarity search, optional document filtering, and compatibility with test doubles.
+
+A real PDF RAG Agent was implemented. It embeds the user question, searches Qdrant, validates results through the typed PDF evidence model, applies a similarity threshold, and submits page-aware findings only through the Coordinator.
+
+The Coordinator now collects retrieval evidence before invoking the GPT Teaching Agent. Approved findings are passed through the task context, and raw retrieval chunks are not returned as the final user-facing answer.
+
+Active-document isolation was added. Streamlit stores the document ID returned after indexing, attaches it to each Tutor Request, and the PDF RAG Agent restricts Qdrant retrieval to that document. This prevents older documents, including earlier test content, from contaminating answers about a newly uploaded PDF.
+
+Streamlit now supports PDF upload, safe filename handling, save-and-index actions, indexing status, indexed-document listing, active-document tracking, and PDF-grounded questions.
+
+Phase 4 was validated through automated tests and real Streamlit verification covering PDF extraction, chunking, hashing, manifests, embeddings, Qdrant operations, indexing, evidence validation, similarity thresholds, upload safety, active-document filtering, Coordinator-to-GPT evidence flow, and document-status display.
+
+## Current workflow
+
+```
+User uploads PDF
+        ↓
+Streamlit saves PDF
+        ↓
+Document indexer extracts pages and chunks
+        ↓
+OpenAI embedding provider creates vectors
+        ↓
+Qdrant stores vectors and page-aware metadata
+        ↓
+User asks a question
+        ↓
+Coordinator identifies the active document
+        ↓
+PDF RAG Agent searches only that document
+        ↓
+Coordinator passes approved evidence to GPT
+        ↓
+GPT Teaching Agent explains the evidence
+        ↓
+Streamlit displays the teaching answer
+```
+
 ## Current temporary limitations
 
-The GPT Teaching Agent currently produces a teaching response but does not yet use retrieved PDF, web, or GitHub evidence in its prompt.
+Web research and GitHub research remain temporary stubs. They do not yet retrieve live websites, official documentation, repositories, or code examples.
 
-The PDF RAG, Web Research, and GitHub agents are still temporary stubs. They do not yet retrieve real documents, websites, repositories, or code examples.
+Formal citation verification and cross-source evidence normalization have not yet been implemented. PDF findings currently preserve filename, page number, excerpt, and similarity metadata, but final citation-quality enforcement is a later phase.
 
-Qdrant has not yet been connected to the application.
+The application currently uses OpenAI for teaching completions and embeddings and requires a configured API key for real requests. Automated tests use fake clients to avoid external calls.
 
-Citation verification and evidence normalization have not yet been implemented.
+The Coordinator currently dispatches registered agents sequentially. More advanced parallel execution, retries, timeout enforcement, source freshness checks, and verification will be added later.
 
-The application currently uses the OpenAI GPT provider and requires a configured API key for real requests. Automated tests use fake clients to avoid external calls.
-
-The Coordinator currently dispatches registered agents sequentially. More advanced parallel execution, retries, timeout enforcement, source normalization, and verification will be added later.
+The local Qdrant and document filesystem are suitable for development and private deployment. Public deployment requires a deliberate persistence and privacy strategy for uploaded documents and vector storage.
 
 The application does not execute code retrieved from GitHub or other sources.
 
-## Planned technology stack
+## Technology stack
 
 | Area | Technology |
 | --- | --- |
 | Language | Python 3.10.8 or later |
 | User interface | Streamlit |
-| Initial model provider | OpenAI GPT |
-| Initial default model | `gpt-5-mini` |
+| Teaching model provider | OpenAI GPT |
+| Default teaching model | `gpt-5-mini` |
+| Embedding provider | OpenAI embeddings |
+| Default embedding model | `text-embedding-3-small` |
 | Vector database | Qdrant |
-| PDF processing | Python PDF extraction library |
+| PDF processing | `pypdf` |
 | Testing | pytest |
 | Formatting and quality | Ruff and mypy |
 | Containerization | Docker and Docker Compose |
 | Initial deployment style | Private Dockerized deployment |
 
-The OpenAI model name is configured through environment variables. The application also supports fake model clients in tests so the test suite does not require API access.
+Model names, API keys, Qdrant connection details, retrieval thresholds, document paths, and logging levels are configured through environment variables. The application supports fake model and retrieval clients in tests.
 
 ## Planned final workflow
 
@@ -151,10 +191,10 @@ User question
 Streamlit interface
     ↓
 Coordinator validates and routes the request
-    ├── GPT Teaching Agent
     ├── PDF RAG Agent
     ├── Web Research Agent
-    └── GitHub Agent
+    ├── GitHub Agent
+    └── GPT Teaching Agent
     ↓
 Coordinator aggregates evidence
     ↓
@@ -169,7 +209,7 @@ Coordinator final policy check
 Streamlit answer with citations and exercises
 ```
 
-All results return to the Coordinator before being passed to another agent. For example, the Web Research Agent will return documentation findings to the Coordinator. If the GPT Teaching Agent needs those findings, the Coordinator will provide approved context in a new task.
+All results return to the Coordinator before being passed to another agent. If the GPT Teaching Agent needs PDF, web, or GitHub findings, the Coordinator provides approved context in a new task.
 
 ## Local setup
 
@@ -200,6 +240,14 @@ OPENAI_API_KEY=your-openai-api-key
 
 Never commit the real `.env` file or any API key.
 
+## Start Qdrant
+
+Docker Desktop must be running. From the project root:
+
+```
+docker compose up -d qdrant
+```
+
 ## Run the application
 
 From the project root:
@@ -208,7 +256,7 @@ From the project root:
 streamlit run streamlit_app.py
 ```
 
-The current application accepts a question, sends it to the Coordinator, invokes the GPT Teaching Agent, and displays the generated teaching response.
+The current application supports GPT teaching, PDF upload, PDF indexing, indexed-document status, active-document filtering, and PDF-grounded responses.
 
 ## Run tests
 
@@ -216,23 +264,35 @@ The current application accepts a question, sends it to the Coordinator, invokes
 pytest -q
 ```
 
-The Phase 3 test suite contains automated tests for the Coordinator, context store, router, temporary agents, failure behavior, OpenAI adapter, structured output, GPT Teaching Agent, learner-level behavior, and request isolation.
+The test suite covers the Coordinator, context store, router, temporary agents, failure behavior, OpenAI adapter, structured output, GPT Teaching Agent, PDF extraction, chunking, hashing, manifests, embeddings, Qdrant operations, indexing, evidence validation, upload safety, document isolation, and end-to-end grounding.
 
-## Manual OpenAI connectivity check
+## Manual connectivity checks
 
-The manual connectivity script is located at:
-
-```
-scripts/test_openai_connection.py
-```
-
-Run it as a module from the project root:
+Run the OpenAI GPT check from the project root:
 
 ```
 python -m scripts.test_openai_connection
 ```
 
-This script performs a real external API request and should not be included in the normal pytest suite.
+Run the OpenAI embedding check:
+
+```
+python -m scripts.test_openai_embeddings
+```
+
+Run the Qdrant connection check:
+
+```
+python -m scripts.test_qdrant_connection
+```
+
+Index the sample PDF manually:
+
+```
+python -m scripts.index_sample_pdf
+```
+
+These scripts perform real local or external operations and should not be included in the normal pytest suite.
 
 ## Project directories
 
@@ -241,11 +301,13 @@ app/          Application source code
   agents/     Subagent implementations
   config/     Environment and logging configuration
   coordinator/Coordinator, routing, gateway, and context store
-  domain/     Typed communication models
-  llm/        OpenAI model adapters and usage tracking
-  ui/         Planned reusable Streamlit components
+  domain/     Typed communication, document, and evidence models
+  ingestion/  Hashing, manifests, and document indexing
+  llm/        OpenAI model adapters, structured output, and usage tracking
+  retrieval/  PDF extraction, chunking, embeddings, and Qdrant storage
+  ui/         Streamlit upload and document-management helpers
 
-data/         Local documents, generated data, storage, and logs
+data/        Local documents, generated data, storage, and logs
 tests/        Unit and integration tests
 scripts/      Manual command-line utilities
 docs/         Architecture, deployment, security, and evaluation documentation
@@ -253,21 +315,15 @@ docs/         Architecture, deployment, security, and evaluation documentation
 
 ## Development principles
 
-The project is being built incrementally. Each phase must produce a runnable and testable result before the next phase begins.
+The project is built incrementally. Each phase must produce a runnable and testable result before the next phase begins.
 
-The system will prefer evidence over unsupported claims. Retrieved claims should contain source provenance, and the final answer should distinguish retrieved evidence from general explanation.
+The system prefers evidence over unsupported claims. Retrieved claims should contain source provenance, and the final answer should distinguish retrieved evidence from general explanation.
 
-Untrusted content from PDFs, websites, and repositories will be treated as data, not instructions. Retrieved code will not be executed automatically.
+Untrusted content from PDFs, websites, and repositories is treated as data, not instructions. Retrieved code is not executed automatically.
 
-The Coordinator will enforce subagent permissions, execution limits, context boundaries, and final-answer quality checks.
+The Coordinator enforces subagent permissions, context boundaries, and final-answer control. Model calls are centralized, usage is measured, and automated tests use fake clients where external access is unnecessary.
 
-Model calls will be centralized, usage will be measured, and automated tests will use fake clients where external access is unnecessary.
-
-## Next phase
-
-Phase 4 will implement local PDF ingestion and Qdrant-backed retrieval.
-
-The first Phase 4 objectives are to define document metadata, extract PDF text with page numbers, split text into chunks, generate embeddings, persist vectors in Qdrant, and return document-grounded evidence to the Coordinator.
+The active document must be explicitly tracked when the user asks about an uploaded PDF. Retrieval must not silently combine unrelated documents.
 
 ## Documentation records
 
@@ -277,4 +333,12 @@ The first Phase 4 objectives are to define document metadata, extract PDF text w
 
 - `phase_3_process_followed.md` — Phase 3 process record
 
+- `phase_4_process_followed.md` — Phase 4 process record
+
 - `README.md` — Project overview and current status
+
+## Next phase
+
+Phase 5 will implement controlled web research. The Web Research Agent will search for relevant pages, fetch source content, normalize passages, preserve URLs and retrieval metadata, and return findings to the Coordinator. The Coordinator will then decide what information can be passed to the GPT Teaching Agent and future Citation Agent.
+
+**Author:** Manus AI
