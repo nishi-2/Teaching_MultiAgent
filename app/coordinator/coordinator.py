@@ -83,6 +83,7 @@ class Coordinator(CoordinatorGateway):
                 assigned_agent=agent_name,
                 objective="Process the user question",
                 user_question=request.question,
+                learner_level=request.learner_level,
             )
 
             self._task_to_request[task.task_id] = parent_request_id

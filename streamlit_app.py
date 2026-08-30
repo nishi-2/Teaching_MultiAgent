@@ -2,12 +2,12 @@ import logging
 
 import streamlit as st
 
-from app.agents.teaching_agent import TeachingAgent
+from app.agents.gpt_teaching_agent import GPTTeachingAgent
+from app.config.logging_config import configure_logging
 from app.config.settings import settings
 from app.coordinator.coordinator import Coordinator
 from app.domain.messages import TutorRequest
 
-from app.config.logging_config import configure_logging
 
 configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
@@ -21,12 +21,12 @@ st.set_page_config(
 
 @st.cache_resource
 def get_coordinator() -> Coordinator:
-    teaching_agent = TeachingAgent()
+    teaching_agent = GPTTeachingAgent(settings=settings)
     return Coordinator(teaching_agent=teaching_agent)
 
 
 st.title("AI Teaching Tutor")
-st.caption("Phase 1: Streamlit → Coordinator → Teaching Agent")
+st.caption("Phase 3: Streamlit → Coordinator → GPT Teaching Agent")
 
 with st.sidebar:
     st.header("Settings")
@@ -50,10 +50,15 @@ if st.button("Ask Tutor", type="primary"):
             question=question,
             learner_level=learner_level,
         )
-        response = get_coordinator().handle_request(request)
 
-        if response.status == "success":
-            st.subheader("Tutor response")
-            st.write(response.answer)
+        try:
+            response = get_coordinator().handle_request(request)
+        except Exception:
+            logger.exception("Tutor request failed")
+            st.error("The tutor could not complete the request.")
         else:
-            st.error(response.answer)
+            if response.status == "success":
+                st.subheader("Tutor response")
+                st.write(response.answer)
+            else:
+                st.error(response.answer)
