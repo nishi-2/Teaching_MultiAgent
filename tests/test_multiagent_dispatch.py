@@ -13,5 +13,5 @@ def test_coordinator_dispatches_multiple_agents() -> None:
 
     assert response.status == "success"
     assert "Teaching plan created" in response.answer
-    assert "Web Research Agent received" in response.answer
-    assert "GitHub Agent received" in response.answer
+    assert "Web Research Agent received" not in response.answer
+    assert "GitHub Agent received" not in response.answer

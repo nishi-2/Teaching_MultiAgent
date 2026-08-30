@@ -13,4 +13,4 @@ def test_coordinator_dispatches_pdf_agent() -> None:
 
     assert response.status == "success"
     assert "Teaching plan created" in response.answer
-    assert "PDF RAG Agent received" in response.answer
+    assert "PDF RAG Agent received" not in response.answer

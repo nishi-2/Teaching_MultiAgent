@@ -3,8 +3,14 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 
-AgentName = Literal["teaching_agent", "pdf_rag_agent", "web_research_agent",
-                    "github_agent", "citation_agent", "composer_agent",]
+AgentName = Literal[
+    "teaching_agent",
+    "pdf_rag_agent",
+    "web_research_agent",
+    "github_agent",
+    "citation_agent",
+    "composer_agent",
+]
 
 TaskStatus = Literal["success", "partial", "failed", "abstain"]
 LearnerLevel = Literal["beginner", "intermediate", "advanced"]
@@ -13,6 +19,7 @@ LearnerLevel = Literal["beginner", "intermediate", "advanced"]
 class TutorRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     learner_level: LearnerLevel = "beginner"
+    active_document_id: Optional[str] = None
 
 
 class TutorResponse(BaseModel):
