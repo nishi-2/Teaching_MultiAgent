@@ -340,5 +340,3 @@ The active document must be explicitly tracked when the user asks about an uploa
 ## Next phase
 
 Phase 5 will implement controlled web research. The Web Research Agent will search for relevant pages, fetch source content, normalize passages, preserve URLs and retrieval metadata, and return findings to the Coordinator. The Coordinator will then decide what information can be passed to the GPT Teaching Agent and future Citation Agent.
-
-**Author:** Manus AI
