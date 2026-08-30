@@ -386,3 +386,250 @@ Citation verification, real PDF ingestion, embeddings, Qdrant retrieval, web fet
 **Validated behavior:** Typed task communication, Coordinator-mediated findings, routing, multiagent dispatch, failure handling, request isolation, context search, context cleanup, and Streamlit integration.
 
 **Next phase:** Integrate the OpenAI GPT adapter and replace the deterministic Teaching Agent with a real GPT-backed implementation.
+
+
+# AI Teaching Tutor — Phase 3 Process Followed
+
+## Phase 3 objective
+
+The objective of Phase 3 was to integrate OpenAI GPT into the teaching workflow while preserving the Coordinator-mediated architecture and keeping automated tests independent of external API calls.
+
+Phase 3 replaced the deterministic Teaching Agent in the Streamlit application with a GPT-backed Teaching Agent. The model configuration, OpenAI client, structured output support, usage tracking, error handling, learner-level prompting, and test doubles were added incrementally.
+
+The completed Phase 3 workflow is:
+
+```
+User → Streamlit → Coordinator → GPT Teaching Agent → Coordinator → Streamlit response
+```
+
+The GPT Teaching Agent communicates with the Coordinator only. It does not communicate directly with the PDF RAG, Web Research, GitHub, Citation, or Composer agents.
+
+### Step 1: Create the GPT model configuration
+
+A typed GPT model configuration was created at `app/llm/models.py`.
+
+The configuration stores the selected model name and reasoning setting. The model name is read from application settings rather than being repeated throughout the codebase.
+
+The initial default model was configured as `gpt-5-mini`.
+
+### Step 2: Create the OpenAI client adapter
+
+A centralized OpenAI client adapter was created at `app/llm/client.py`.
+
+The adapter receives application settings, creates the OpenAI client, sends Chat Completions requests, applies the configured model, limits completion size, and returns generated text.
+
+Agents do not create independent unmanaged OpenAI clients. They use the centralized adapter.
+
+### Step 3: Test the OpenAI adapter without using the API
+
+A fake OpenAI client was created inside `tests/test_llm_client.py`.
+
+The fake client checks that the configured model and completion limit are passed correctly and returns a simulated GPT response.
+
+This test allows the adapter to be validated without consuming API quota or requiring network access.
+
+### Step 4: Create usage tracking
+
+A usage module was created at `app/llm/usage.py`.
+
+It defines a typed usage record containing prompt tokens, completion tokens, and total tokens.
+
+A safe extraction function was added so missing usage data does not cause the application to fail.
+
+### Step 5: Connect usage tracking to the OpenAI adapter
+
+The OpenAI adapter was updated to return both generated text and a typed usage record.
+
+This provides the foundation for future cost controls, usage dashboards, request budgets, and operational monitoring.
+
+### Step 6: Update the OpenAI adapter test
+
+The adapter test was updated to verify both the generated response and token usage values.
+
+The fake response now includes simulated prompt, completion, and total token counts.
+
+### Step 7: Add structured GPT output
+
+A structured output client was created at `app/llm/structured_output.py`.
+
+It requests strict JSON Schema output and parses the model response into a JSON object.
+
+This will later support predictable Coordinator plans, evidence records, citation reports, and answer models.
+
+### Step 8: Test structured output
+
+A structured-output test was added at `tests/test_structured_output.py`.
+
+The test uses a fake client, verifies that a JSON Schema response format is requested, parses the response, and checks the expected fields.
+
+### Step 9: Configure the local OpenAI key
+
+A private `.env` file was created from `.env.example`.
+
+The OpenAI API key was placed in the local environment file rather than in source code or chat messages.
+
+The `.env` file remains excluded from Git through `.gitignore`.
+
+### Step 10: Test real GPT connectivity
+
+A temporary connection-checking script was created at `scripts/test_openai_connection.py`.
+
+The script sends a short request through the centralized adapter and prints the generated response and token count.
+
+The script was moved out of the `tests` directory because it performs a real external API call and should not run automatically as part of pytest.
+
+The script was executed as a module from the project root to ensure the application package could be imported correctly.
+
+### Step 11: Create the GPT Teaching Agent
+
+A GPT-backed Teaching Agent was created at `app/agents/gpt_teaching_agent.py`.
+
+The agent constructs a teaching prompt, sends it through the OpenAI adapter, submits the generated answer to the Coordinator, and returns usage metadata.
+
+The agent does not communicate directly with any other subagent.
+
+### Step 12: Make the GPT Teaching Agent testable
+
+The GPT Teaching Agent was updated to accept an optional LLM adapter.
+
+This dependency-injection design allows tests to provide a fake LLM instead of calling OpenAI.
+
+The production application uses the real OpenAI adapter, while automated tests use a deterministic fake implementation.
+
+### Step 13: Test the GPT Teaching Agent
+
+A test was added at `tests/test_gpt_teaching_agent.py`.
+
+The test uses a fake LLM, verifies that system and user messages are constructed, checks that the response is sent through the Coordinator, and confirms that usage metadata is returned.
+
+### Step 14: Connect the GPT Teaching Agent to Streamlit
+
+The Streamlit entrypoint was updated to instantiate `GPTTeachingAgent` instead of the deterministic Teaching Agent.
+
+The application now sends conceptual questions through the Coordinator to the real GPT-backed agent.
+
+A controlled exception handler was added around the request so an API or runtime failure displays a safe error message instead of crashing the user interface.
+
+### Step 15: Validate the real GPT workflow
+
+The Streamlit application was restarted after the adapter correction.
+
+A real question was submitted through the interface, and the GPT Teaching Agent returned a visible teaching response through the Coordinator.
+
+### Step 16: Add learner level to Coordinator tasks
+
+The Coordinator task model was expanded with a learner-level field.
+
+The supported levels are beginner, intermediate, and advanced.
+
+The field has a default value so earlier task construction and tests remain compatible.
+
+### Step 17: Pass learner level through the Coordinator
+
+The Coordinator was updated to copy the learner level from the user’s tutor request into the assigned Coordinator task.
+
+This makes learner-level information available to the GPT Teaching Agent without requiring the agent to access Streamlit state directly.
+
+### Step 18: Use learner level in the GPT prompt
+
+The GPT Teaching Agent was updated to include the selected learner level in its user prompt.
+
+The model is now explicitly asked to create a beginner-level, intermediate-level, or advanced-level explanation based on the user’s selection.
+
+### Step 19: Validate learner-level behavior
+
+The Streamlit application was tested with the same question at beginner and advanced levels.
+
+The requests completed successfully and produced responses using the selected learner-level context.
+
+### Step 20: Add the learner-level regression test
+
+A regression test was added at `tests/test_learner_level.py`.
+
+The test uses a recording fake LLM to inspect the prompt sent by the GPT Teaching Agent.
+
+It confirms that the selected advanced learner level and the requested topic are included in the prompt.
+
+### Step 21: Test empty GPT responses
+
+An error-handling test was added at `tests/test_llm_errors.py`.
+
+The test simulates an empty model response and confirms that the OpenAI adapter raises a controlled runtime error containing the finish reason.
+
+This protects the application from silently displaying empty answers.
+
+### Step 22: Run the complete Phase 3 test suite
+
+The complete automated test suite was run after GPT integration, structured output, usage tracking, error handling, and learner-level behavior were implemented.
+
+The Phase 3 suite completed successfully with fifteen passing tests.
+
+The test suite continues to use fake model clients where appropriate, so normal test execution does not require external API calls.
+
+### Step 23: Verify the GPT-backed Streamlit application
+
+The Streamlit application was started and tested with real OpenAI GPT requests.
+
+The application successfully accepted a question, passed it through the Coordinator, invoked the GPT Teaching Agent, received the response, and displayed it in Streamlit.
+
+Beginner and advanced learner-level settings were both verified.
+
+## Phase 3 architecture result
+
+Phase 3 established the following model communication pattern:
+
+```
+Coordinator → GPT Teaching Agent → OpenAI adapter → OpenAI GPT
+
+OpenAI GPT response → OpenAI adapter → GPT Teaching Agent → Coordinator
+```
+
+The GPT Teaching Agent submits its final finding through the Coordinator Gateway. The Coordinator remains responsible for the final response flow.
+
+The prohibited pattern remains:
+
+```
+GPT Teaching Agent → another subagent
+```
+
+## Files created or updated during Phase 3
+
+| File or directory | Purpose |
+| --- | --- |
+| `app/llm/models.py` | GPT model configuration |
+| `app/llm/client.py` | Centralized OpenAI GPT adapter |
+| `app/llm/usage.py` | Token usage records and extraction |
+| `app/llm/structured_output.py` | Strict JSON Schema response handling |
+| `app/agents/gpt_teaching_agent.py` | GPT-backed Teaching Agent |
+| `app/domain/messages.py` | Learner-level task field |
+| `app/coordinator/coordinator.py` | Learner-level propagation and GPT dispatch compatibility |
+| `streamlit_app.py` | GPT-backed Streamlit workflow and safe error handling |
+| `tests/test_llm_client.py` | OpenAI adapter and usage tests |
+| `tests/test_structured_output.py` | Structured response test |
+| `tests/test_gpt_teaching_agent.py` | GPT Teaching Agent test |
+| `tests/test_llm_errors.py` | Empty response error test |
+| `tests/test_learner_level.py` | Learner-level prompt regression test |
+| `scripts/test_openai_connection.py` | Manual real-API connectivity check |
+| `.env` | Local private configuration, excluded from Git |
+
+## Current temporary limitations
+
+The GPT Teaching Agent currently produces a teaching response but does not yet use retrieved PDF, web, or GitHub evidence in its prompt.
+
+The PDF RAG, Web Research, and GitHub agents remain temporary stubs.
+
+Citation verification has not yet been implemented.
+
+The application still needs real PDF ingestion, embeddings, Qdrant indexing, source provenance, evidence normalization, and citation-aware answer composition.
+
+The current OpenAI adapter uses the Chat Completions interface and a configurable completion budget. More advanced model routing, retries, provider fallback, and cost controls will be added later.
+
+The temporary connectivity script should not be included in the normal automated test suite because it makes a real external API request.
+
+## Phase 3 completion status
+
+**Status:** Complete.
+
+**Validated behavior:** OpenAI GPT configuration, centralized API access, usage tracking, structured output, test doubles, GPT Teaching Agent integration, empty-response handling, learner-level prompting, Streamlit integration, and fifteen passing automated tests.
+
+**Next phase:** Implement local PDF ingestion, page-aware chunking, embeddings, and Qdrant-backed retrieval.
